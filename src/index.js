@@ -3,22 +3,25 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
 const app = new Hono();
 
+// Redirect root to admin login
+app.get('/', (c) => c.redirect('/admin/login'));
+
 // Auth Middleware for /admin/*
 app.use('/admin/*', async (c, next) => {
-    if (c.req.path === '/admin/login' || c.req.path === '/admin/login/submit') {
-        return await next();
-    }
-    const token = getCookie(c, 'admin_session');
-    // Simple check, in real world use a better signed session token
-    if (token !== 'authenticated') {
-        return c.redirect('/admin/login');
-    }
-    await next();
+  if (c.req.path === '/admin/login' || c.req.path === '/admin/login/submit') {
+    return await next();
+  }
+  const token = getCookie(c, 'admin_session');
+  // Simple check, in real world use a better signed session token
+  if (token !== 'authenticated') {
+    return c.redirect('/admin/login');
+  }
+  await next();
 });
 
 // Admin Login Page
 app.get('/admin/login', (c) => {
-    return c.html(`
+  return c.html(`
     <!DOCTYPE html>
     <html lang="zh-CN">
     <head>
@@ -53,41 +56,52 @@ app.get('/admin/login', (c) => {
 });
 
 app.post('/admin/login/submit', async (c) => {
-    const body = await c.req.parseBody();
-    const password = body.password;
+  const body = await c.req.parseBody();
+  const password = body.password;
 
-    if (password === c.env.ADMIN_PASSWORD) {
-        setCookie(c, 'admin_session', 'authenticated', {
-            path: '/',
-            secure: true,
-            httpOnly: true,
-            maxAge: 60 * 60 * 24 // 1 day
-        });
-        return c.redirect('/admin');
-    } else {
-        return c.redirect('/admin/login?error=1');
-    }
+  if (password === c.env.ADMIN_PASSWORD) {
+    setCookie(c, 'admin_session', 'authenticated', {
+      path: '/',
+      secure: true,
+      httpOnly: true,
+      maxAge: 60 * 60 * 24 // 1 day
+    });
+    return c.redirect('/admin');
+  } else {
+    return c.redirect('/admin/login?error=1');
+  }
 });
 
 app.get('/admin/logout', (c) => {
-    deleteCookie(c, 'admin_session', { path: '/' });
-    return c.redirect('/admin/login');
+  deleteCookie(c, 'admin_session', { path: '/' });
+  return c.redirect('/admin/login');
 });
 
 // Admin Dashboard
 app.get('/admin', async (c) => {
-    const db = c.env.DB;
+  const db = c.env.DB;
 
-    // Fetch overview stats
-    const statsQuery = await db.prepare('SELECT SUM(views) as totalViews, SUM(clicks) as totalClicks, count(*) as totalCount FROM float_configs').first();
-    const totalViews = statsQuery?.totalViews || 0;
-    const totalClicks = statsQuery?.totalClicks || 0;
-    const totalCount = statsQuery?.totalCount || 0;
+  // Auto-initialize schema if it doesn't exist
+  await db.prepare(`CREATE TABLE IF NOT EXISTS float_configs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        icon_url TEXT NOT NULL,
+        target_url TEXT NOT NULL,
+        views INTEGER DEFAULT 0,
+        clicks INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`).run();
 
-    // Fetch list
-    const { results: list } = await db.prepare('SELECT * FROM float_configs ORDER BY created_at DESC').all();
+  // Fetch overview stats
+  const statsQuery = await db.prepare('SELECT SUM(views) as totalViews, SUM(clicks) as totalClicks, count(*) as totalCount FROM float_configs').first();
+  const totalViews = statsQuery?.totalViews || 0;
+  const totalClicks = statsQuery?.totalClicks || 0;
+  const totalCount = statsQuery?.totalCount || 0;
 
-    return c.html(`
+  // Fetch list
+  const { results: list } = await db.prepare('SELECT * FROM float_configs ORDER BY created_at DESC').all();
+
+  return c.html(`
     <!DOCTYPE html>
     <html lang="zh-CN">
     <head>
@@ -202,47 +216,47 @@ app.get('/admin', async (c) => {
 
 // Admin Create Config
 app.post('/admin/create', async (c) => {
-    const body = await c.req.parseBody();
-    const db = c.env.DB;
-    await db.prepare('INSERT INTO float_configs (name, icon_url, target_url) VALUES (?, ?, ?)')
-        .bind(body.name, body.icon_url, body.target_url)
-        .run();
+  const body = await c.req.parseBody();
+  const db = c.env.DB;
+  await db.prepare('INSERT INTO float_configs (name, icon_url, target_url) VALUES (?, ?, ?)')
+    .bind(body.name, body.icon_url, body.target_url)
+    .run();
 
-    return c.redirect('/admin');
+  return c.redirect('/admin');
 });
 
 // Admin Delete Config
 app.post('/admin/delete/:id', async (c) => {
-    const id = c.req.param('id');
-    const db = c.env.DB;
-    await db.prepare('DELETE FROM float_configs WHERE id = ?').bind(id).run();
-    return c.redirect('/admin');
+  const id = c.req.param('id');
+  const db = c.env.DB;
+  await db.prepare('DELETE FROM float_configs WHERE id = ?').bind(id).run();
+  return c.redirect('/admin');
 });
 
 // JS Service Endpoint
 app.get('/js/:id', async (c) => {
-    const id = c.req.param('id');
-    const db = c.env.DB;
+  const id = c.req.param('id');
+  const db = c.env.DB;
 
-    // Fetch config
-    const config = await db.prepare('SELECT * FROM float_configs WHERE id = ?').bind(id).first();
+  // Fetch config
+  const config = await db.prepare('SELECT * FROM float_configs WHERE id = ?').bind(id).first();
 
-    if (!config) {
-        return c.text('console.error("Floating button config not found.");', 404);
-    }
+  if (!config) {
+    return c.text('console.error("Floating button config not found.");', 404);
+  }
 
-    // Record view asynchronously using executionContext so it doesn't block response
-    // Unfortunately for sqlite D1 it's quite fast anyway
-    try {
-        await db.prepare('UPDATE float_configs SET views = views + 1 WHERE id = ?').bind(id).run();
-    } catch (e) {
-        console.error("Error updating views", e);
-    }
+  // Record view asynchronously using executionContext so it doesn't block response
+  // Unfortunately for sqlite D1 it's quite fast anyway
+  try {
+    await db.prepare('UPDATE float_configs SET views = views + 1 WHERE id = ?').bind(id).run();
+  } catch (e) {
+    console.error("Error updating views", e);
+  }
 
-    const originUrl = new URL(c.req.url).origin;
-    const clickEndpoint = `${originUrl}/click/${id}`;
+  const originUrl = new URL(c.req.url).origin;
+  const clickEndpoint = `${originUrl}/click/${id}`;
 
-    const jsCode = `
+  const jsCode = `
 (function() {
     // 1. 动态注入 CSS 样式
     const css = \`
@@ -413,35 +427,35 @@ app.get('/js/:id', async (c) => {
 })();
 `;
 
-    return c.text(jsCode, 200, {
-        'Content-Type': 'application/javascript; charset=utf-8',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-    });
+  return c.text(jsCode, 200, {
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
 });
 
 // Click Tracking and Redirect Endpoint
 app.get('/click/:id', async (c) => {
-    const id = c.req.param('id');
-    const db = c.env.DB;
+  const id = c.req.param('id');
+  const db = c.env.DB;
 
-    // Fetch config
-    const config = await db.prepare('SELECT target_url FROM float_configs WHERE id = ?').bind(id).first();
+  // Fetch config
+  const config = await db.prepare('SELECT target_url FROM float_configs WHERE id = ?').bind(id).first();
 
-    if (!config) {
-        return c.text('Target not found', 404);
-    }
+  if (!config) {
+    return c.text('Target not found', 404);
+  }
 
-    // Record click
-    try {
-        await db.prepare('UPDATE float_configs SET clicks = clicks + 1 WHERE id = ?').bind(id).run();
-    } catch (e) {
-        console.error("Error updating clicks", e);
-    }
+  // Record click
+  try {
+    await db.prepare('UPDATE float_configs SET clicks = clicks + 1 WHERE id = ?').bind(id).run();
+  } catch (e) {
+    console.error("Error updating clicks", e);
+  }
 
-    // Redirect to final destination
-    return c.redirect(config.target_url, 302);
+  // Redirect to final destination
+  return c.redirect(config.target_url, 302);
 });
 
 export default app;
