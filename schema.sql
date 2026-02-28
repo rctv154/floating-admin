@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS float_configs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    icon_url TEXT NOT NULL,
+    target_url TEXT NOT NULL,
+    views INTEGER DEFAULT 0,
+    clicks INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

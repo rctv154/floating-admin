@@ -1,0 +1,12 @@
+name = "floating-admin"
+main = "src/index.js"
+compatibility_date = "2024-03-20"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ADMIN_PASSWORD = "admin"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "floating-db"
+database_id = "local-db-id"
