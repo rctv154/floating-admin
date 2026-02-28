@@ -138,7 +138,10 @@ app.get('/admin', async (c) => {
       <div class="container">
         <div class="header">
           <h1>浮窗管理系统</h1>
-          <a href="/admin/logout" class="btn btn-danger">退出登录</a>
+          <div style="display: flex; gap: 10px;">
+              <button onclick="openModal()" class="btn" style="background: #52c41a;">+ 添加新浮窗</button>
+              <a href="/admin/logout" class="btn btn-danger">退出登录</a>
+          </div>
         </div>
 
         <div class="stats-grid">
@@ -156,17 +159,7 @@ app.get('/admin', async (c) => {
           </div>
         </div>
 
-        <div class="panel">
-          <h2>添加新浮窗</h2>
-          <form action="/admin/create" method="post">
-            <div class="form-row">
-              <input type="text" name="name" placeholder="浮窗名称 (例如：首页引导)" required>
-              <input type="url" name="icon_url" placeholder="图标图片URL" required>
-              <input type="url" name="target_url" placeholder="点击跳转的URL" required>
-              <button type="submit" class="btn">新增</button>
-            </div>
-          </form>
-        </div>
+        <!-- Modal elements moved to the bottom -->
 
         <div class="panel">
           <h2>浮窗列表</h2>
@@ -195,12 +188,15 @@ app.get('/admin', async (c) => {
                     <td><strong>${item.views}</strong></td>
                     <td><strong>${item.clicks}</strong></td>
                     <td>
-                      <div class="code-box">&lt;script src="${new URL(c.req.url).origin}/js/${item.id}"&gt;&lt;/script&gt;</div>
+                      <div class="code-box" onclick="copyCode(this)" title="点击复制代码" style="cursor: pointer;">&lt;script src="${new URL(c.req.url).origin}/js/${item.id}"&gt;&lt;/script&gt;</div>
                     </td>
                     <td>
-                      <form action="/admin/delete/${item.id}" method="post" onsubmit="return confirm('确定要删除吗？数据将不可恢复！');">
-                        <button type="submit" class="btn btn-danger" style="padding: 4px 8px; font-size: 13px;">删除</button>
-                      </form>
+                      <div style="display: flex; gap: 5px;">
+                        <button type="button" class="btn" style="padding: 4px 8px; font-size: 13px;" onclick="openEditModal(${item.id}, \`${item.name}\`, \`${item.target_url}\`)">修改</button>
+                        <form action="/admin/delete/${item.id}" method="post" onsubmit="return confirm('确定要删除吗？数据将不可恢复！');">
+                            <button type="submit" class="btn btn-danger" style="padding: 4px 8px; font-size: 13px;">删除</button>
+                        </form>
+                      </div>
                     </td>
                   </tr>
                 `).join('')}
@@ -209,6 +205,74 @@ app.get('/admin', async (c) => {
           </div>
         </div>
       </div>
+      
+      <!-- Modal Overlay -->
+      <div id="modalOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; justify-content:center; align-items:center;">
+        <div style="background:white; padding: 25px; border-radius: 8px; width: 400px; max-width: 90%;">
+            <h2 id="modalTitle" style="margin-top: 0;">添加新浮窗</h2>
+            <form id="modalForm" action="/admin/create" method="post" style="display: flex; flex-direction: column; gap: 15px;">
+                <input type="hidden" name="id" id="editId">
+                <div>
+                    <label style="display:block; margin-bottom: 5px; font-weight: bold;">浮窗名称</label>
+                    <input type="text" name="name" id="inputName" placeholder="例如：首页引导" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <!-- 隐藏原有强制必填图片，修改时不强求修改图片 -->
+                <div id="iconUrlContainer">
+                    <label style="display:block; margin-bottom: 5px; font-weight: bold;">图标图片URL <span id="iconHelp" style="font-weight: normal; font-size: 12px; color: #888;"></span></label>
+                    <input type="url" name="icon_url" id="inputIcon" placeholder="图标图片URL (不填则不修改图片)" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <div>
+                    <label style="display:block; margin-bottom: 5px; font-weight: bold;">点击跳转的URL</label>
+                    <input type="url" name="target_url" id="inputTarget" placeholder="点击跳转的URL" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                    <button type="button" class="btn" style="background:#ccc; color:#333;" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn">保存</button>
+                </div>
+            </form>
+        </div>
+      </div>
+
+      <div id="toast" style="display:none; position:fixed; top:20px; right:20px; background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 4px; z-index: 1000;">已复制到剪贴板</div>
+
+      <script>
+        function copyCode(element) {
+            const text = element.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = document.getElementById('toast');
+                toast.style.display = 'block';
+                setTimeout(() => toast.style.display = 'none', 2000);
+            });
+        }
+
+        function openModal() {
+            document.getElementById('modalTitle').innerText = '添加新浮窗';
+            document.getElementById('modalForm').action = '/admin/create';
+            document.getElementById('editId').value = '';
+            document.getElementById('inputName').value = '';
+            document.getElementById('inputIcon').value = '';
+            document.getElementById('inputIcon').required = true;
+            document.getElementById('iconHelp').innerText = '(必填)';
+            document.getElementById('inputTarget').value = '';
+            document.getElementById('modalOverlay').style.display = 'flex';
+        }
+
+        function openEditModal(id, name, target_url) {
+            document.getElementById('modalTitle').innerText = '修改浮窗配置';
+            document.getElementById('modalForm').action = '/admin/edit';
+            document.getElementById('editId').value = id;
+            document.getElementById('inputName').value = name;
+            document.getElementById('inputIcon').value = '';
+            document.getElementById('inputIcon').required = false;  // 修改时图片不必填
+            document.getElementById('iconHelp').innerText = '(选填，留空则不修改图片)';
+            document.getElementById('inputTarget').value = target_url;
+            document.getElementById('modalOverlay').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+        }
+      </script>
     </body>
     </html>
   `);
@@ -222,28 +286,72 @@ app.post('/admin/create', async (c) => {
   let iconDataObj = body.icon_url;
 
   // Attempt to download and convert image to base64
-  try {
-    const response = await fetch(body.icon_url);
-    if (response.ok) {
-      const arrayBuffer = await response.arrayBuffer();
-      // Convert arrayBuffer to base64
-      const uint8Array = new Uint8Array(arrayBuffer);
-      let binaryString = '';
-      for (let i = 0; i < uint8Array.length; i++) {
-        binaryString += String.fromCharCode(uint8Array[i]);
+  if (body.icon_url && body.icon_url.startsWith('http')) {
+    try {
+      const response = await fetch(body.icon_url);
+      if (response.ok) {
+        const arrayBuffer = await response.arrayBuffer();
+        // Convert arrayBuffer to base64
+        const uint8Array = new Uint8Array(arrayBuffer);
+        let binaryString = '';
+        for (let i = 0; i < uint8Array.length; i++) {
+          binaryString += String.fromCharCode(uint8Array[i]);
+        }
+        const base64String = btoa(binaryString);
+        const contentType = response.headers.get('content-type') || 'image/png';
+        iconDataObj = `data:${contentType};base64,${base64String}`;
+      } else {
+        console.error("Failed to fetch image:", response.status);
       }
-      const base64String = btoa(binaryString);
-      const contentType = response.headers.get('content-type') || 'image/png';
-      iconDataObj = `data:${contentType};base64,${base64String}`;
-    } else {
-      console.error("Failed to fetch image:", response.status);
+    } catch (e) {
+      console.error("Error converting image to base64:", e);
     }
-  } catch (e) {
-    console.error("Error converting image to base64:", e);
   }
 
   await db.prepare('INSERT INTO float_configs (name, icon_url, target_url) VALUES (?, ?, ?)')
     .bind(body.name, iconDataObj, body.target_url)
+    .run();
+
+  return c.redirect('/admin');
+});
+
+// Admin Edit Config
+app.post('/admin/edit', async (c) => {
+  const body = await c.req.parseBody();
+  const db = c.env.DB;
+
+  let iconUpdateQuery = '';
+  let params = [body.name, body.target_url];
+
+  if (body.icon_url && body.icon_url.trim() !== '') {
+    let iconDataObj = body.icon_url;
+    // Fetch new image if provided
+    if (body.icon_url.startsWith('http')) {
+      try {
+        const response = await fetch(body.icon_url);
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
+          let binaryString = '';
+          for (let i = 0; i < uint8Array.length; i++) {
+            binaryString += String.fromCharCode(uint8Array[i]);
+          }
+          const base64String = btoa(binaryString);
+          const contentType = response.headers.get('content-type') || 'image/png';
+          iconDataObj = `data:${contentType};base64,${base64String}`;
+        }
+      } catch (e) {
+        console.error("Error converting image to base64:", e);
+      }
+    }
+    iconUpdateQuery = ', icon_url = ?';
+    params.push(iconDataObj);
+  }
+
+  params.push(body.id);
+
+  await db.prepare(`UPDATE float_configs SET name = ?, target_url = ?${iconUpdateQuery} WHERE id = ?`)
+    .bind(...params)
     .run();
 
   return c.redirect('/admin');
