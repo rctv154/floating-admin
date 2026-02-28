@@ -218,8 +218,32 @@ app.get('/admin', async (c) => {
 app.post('/admin/create', async (c) => {
   const body = await c.req.parseBody();
   const db = c.env.DB;
+
+  let iconDataObj = body.icon_url;
+
+  // Attempt to download and convert image to base64
+  try {
+    const response = await fetch(body.icon_url);
+    if (response.ok) {
+      const arrayBuffer = await response.arrayBuffer();
+      // Convert arrayBuffer to base64
+      const uint8Array = new Uint8Array(arrayBuffer);
+      let binaryString = '';
+      for (let i = 0; i < uint8Array.length; i++) {
+        binaryString += String.fromCharCode(uint8Array[i]);
+      }
+      const base64String = btoa(binaryString);
+      const contentType = response.headers.get('content-type') || 'image/png';
+      iconDataObj = `data:${contentType};base64,${base64String}`;
+    } else {
+      console.error("Failed to fetch image:", response.status);
+    }
+  } catch (e) {
+    console.error("Error converting image to base64:", e);
+  }
+
   await db.prepare('INSERT INTO float_configs (name, icon_url, target_url) VALUES (?, ?, ?)')
-    .bind(body.name, body.icon_url, body.target_url)
+    .bind(body.name, iconDataObj, body.target_url)
     .run();
 
   return c.redirect('/admin');
@@ -281,10 +305,11 @@ app.get('/js/:id', async (c) => {
             border: 1px solid rgba(0,0,0,0.05);
         }
         #dynamic-floating-btn-${id} .float-icon {
-            width: 70%;
-            height: 70%;
+            width: 85%;
+            height: 85%;
             object-fit: contain;
             pointer-events: none;
+            border-radius: 15px;
         }
         #dynamic-floating-btn-${id}.is-hidden {
             opacity: 0.5;
