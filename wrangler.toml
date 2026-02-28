@@ -9,4 +9,4 @@ ADMIN_PASSWORD = "admin"
 [[d1_databases]]
 binding = "DB"
 database_name = "floating-db"
-database_id = "4a7609c3-446c-40f1-8e28-34c498a44757"
+database_id = "74344fe6-7b65-495c-9df4-36edcbfc0864"
